@@ -9,6 +9,7 @@ name: Build firmware
 
 on:
   push:
+    paths-ignore: ['**.md']
   pull_request:
   workflow_dispatch:
 
@@ -28,7 +29,7 @@ jobs:
         shell: bash
         working-directory: cocis_smart
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build (with sdkconfig.defaults)
         run: |
@@ -50,12 +51,12 @@ jobs:
         run: |
           . "$IDF_PATH/export.sh" > /dev/null
           if [ -f build/cocis_smart.bin ]; then
-            size=$(idf.py size 2>/dev/null | grep -E "Total image size" | head -1)
+            size=$(idf.py size 2>/dev/null | grep -E "Total image size" | head -1 || true)
             echo "::notice title=Image size ${{ matrix.idf }}::$size"
           fi
           for log in ../build.log ../build_plain.log; do
             [ -f "$log" ] || continue
-            errs=$(grep -E "error:|Error:|warning:|undefined reference|FAILED" "$log" | grep -v "^--" | sort -u | head -60)
+            errs=$(grep -E "error:|Error:|warning:|undefined reference|FAILED" "$log" | sort -u | head -60 || true)
             if [ -n "$errs" ]; then
               msg=$(printf '%s' "$errs" | sed -e 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
               echo "::warning title=Compiler output $(basename $log) ${{ matrix.idf }}::$msg"

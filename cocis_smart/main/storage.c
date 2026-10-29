@@ -337,11 +337,11 @@ bool role_parse(const char *s, role_t *out)
 static void users_defaults(void)
 {
     static const user_t def[] = {
-        { CARD_A_UID, "Demo Student",     "2400712345", ROLE_STUDENT,  true },
-        { CARD_B_UID, "Demo Staff",       "STAFF-001",  ROLE_STAFF,    true },
-        { "C0FFEE01", "Security Officer", "SEC-001",    ROLE_SECURITY, true },
-        { "AD000001", "College Admin",    "ADM-001",    ROLE_ADMIN,    true },
-        { "DEADBEEF", "Lost Card",        "2400700000", ROLE_STUDENT,  false },
+        { CARD_A_UID, "Demo Student",     "2400712345", ROLE_STUDENT,  true, false },
+        { CARD_B_UID, "Demo Staff",       "STAFF-001",  ROLE_STAFF,    true, false },
+        { "C0FFEE01", "Security Officer", "SEC-001",    ROLE_SECURITY, true, false },
+        { "AD000001", "College Admin",    "ADM-001",    ROLE_ADMIN,    true, false },
+        { "DEADBEEF", "Lost Card",        "2400700000", ROLE_STUDENT,  false, false },
     };
     s_nusers = sizeof def / sizeof def[0];
     memcpy(s_users, def, sizeof def);
