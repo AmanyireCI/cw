@@ -250,6 +250,9 @@ void report_build(const char *datestr, char *buf, size_t len);
 /* ----------------------------------------------------------------- cli.c */
 void cli_start(void);
 
+/* ---------------------------------------------------------------- main.c */
+void cocis_start(void);   /* creates the start-up task */
+
 /* -------------------------------------------------------------- stress.c */
 void stress_run(int n);
 void race_demo(int n, bool use_mutex);

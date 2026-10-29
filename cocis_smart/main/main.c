@@ -130,7 +130,16 @@ static void startup_task(void *arg)
     vTaskDelete(NULL);
 }
 
-void app_main(void)
+void cocis_start(void)
 {
     xTaskCreatePinnedToCore(startup_task, "startup", 8192, NULL, 5, NULL, 1);
 }
+
+/* wokwi.com builds ESP-IDF projects on the Arduino-ESP32 core, which owns
+ * app_main() and calls setup()/loop() instead (see arduino_entry.cpp). */
+#ifndef ARDUINO
+void app_main(void)
+{
+    cocis_start();
+}
+#endif

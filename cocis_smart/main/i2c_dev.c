@@ -2,24 +2,72 @@
  * i2c_dev.c - shared I2C bus: DS1307 RTC (0x68) and LCD1602 with PCF8574
  * backpack (0x27). Both devices share one bus, so every transaction holds
  * g_i2c_mutex.
+ *
+ * ESP-IDF 5.2+ uses the new i2c_master driver (required on wokwi.com, whose
+ * Arduino-ESP32 core links that driver; mixing it with the legacy driver
+ * aborts at boot). ESP-IDF 5.1 falls back to the legacy driver.
  */
 #include <string.h>
 #include <stdio.h>
-#include "driver/i2c.h"
+#include "esp_idf_version.h"
 #include "esp_log.h"
 #include "app.h"
 
-#define I2C_PORT   I2C_NUM_0
 #define RTC_ADDR   0x68
 #define LCD_ADDR   0x27
-#define I2C_TO     pdMS_TO_TICKS(50)
+#define I2C_TO_MS  50
 
-/* PCF8574 -> HD44780 wiring: P0=RS P1=RW P2=E P3=backlight P4..P7=D4..D7 */
-#define LCD_RS  0x01
-#define LCD_EN  0x04
-#define LCD_BL  0x08
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 2, 0)
+#include "driver/i2c_master.h"
+static i2c_master_bus_handle_t s_bus;
+static i2c_master_dev_handle_t s_dev_rtc, s_dev_lcd;
+#define DEV_RTC s_dev_rtc
+#define DEV_LCD s_dev_lcd
+typedef i2c_master_dev_handle_t i2c_dev_t;
 
-static bool s_lcd_ok;
+static esp_err_t i2c_wr(i2c_dev_t dev, const uint8_t *d, size_t n)
+{
+    return i2c_master_transmit(dev, d, n, I2C_TO_MS);
+}
+
+static esp_err_t i2c_wrrd(i2c_dev_t dev, const uint8_t *w, size_t wn, uint8_t *r, size_t rn)
+{
+    return i2c_master_transmit_receive(dev, w, wn, r, rn, I2C_TO_MS);
+}
+
+void i2c_bus_init(void)
+{
+    i2c_master_bus_config_t bc = {
+        .i2c_port = I2C_NUM_0,
+        .sda_io_num = PIN_I2C_SDA, .scl_io_num = PIN_I2C_SCL,
+        .clk_source = I2C_CLK_SRC_DEFAULT, .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = true,
+    };
+    ESP_ERROR_CHECK(i2c_new_master_bus(&bc, &s_bus));
+    i2c_device_config_t dc = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7, .scl_speed_hz = 100000,
+    };
+    dc.device_address = RTC_ADDR;
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(s_bus, &dc, &s_dev_rtc));
+    dc.device_address = LCD_ADDR;
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(s_bus, &dc, &s_dev_lcd));
+}
+#else
+#include "driver/i2c.h"
+#define I2C_PORT I2C_NUM_0
+#define DEV_RTC  RTC_ADDR
+#define DEV_LCD  LCD_ADDR
+typedef uint8_t i2c_dev_t;
+
+static esp_err_t i2c_wr(i2c_dev_t addr, const uint8_t *d, size_t n)
+{
+    return i2c_master_write_to_device(I2C_PORT, addr, d, n, pdMS_TO_TICKS(I2C_TO_MS));
+}
+
+static esp_err_t i2c_wrrd(i2c_dev_t addr, const uint8_t *w, size_t wn, uint8_t *r, size_t rn)
+{
+    return i2c_master_write_read_device(I2C_PORT, addr, w, wn, r, rn, pdMS_TO_TICKS(I2C_TO_MS));
+}
 
 void i2c_bus_init(void)
 {
@@ -32,6 +80,14 @@ void i2c_bus_init(void)
     i2c_param_config(I2C_PORT, &c);
     i2c_driver_install(I2C_PORT, I2C_MODE_MASTER, 0, 0, 0);
 }
+#endif
+
+/* PCF8574 -> HD44780 wiring: P0=RS P1=RW P2=E P3=backlight P4..P7=D4..D7 */
+#define LCD_RS  0x01
+#define LCD_EN  0x04
+#define LCD_BL  0x08
+
+static bool s_lcd_ok;
 
 /* ---------------------------------------------------------------- RTC */
 static uint8_t bcd2dec(uint8_t v) { return (v >> 4) * 10 + (v & 0x0F); }
@@ -41,7 +97,7 @@ bool rtc_read(struct tm *out)
 {
     uint8_t reg = 0, d[7];
     xSemaphoreTake(g_i2c_mutex, portMAX_DELAY);
-    esp_err_t e = i2c_master_write_read_device(I2C_PORT, RTC_ADDR, &reg, 1, d, 7, I2C_TO);
+    esp_err_t e = i2c_wrrd(DEV_RTC, &reg, 1, d, 7);
     xSemaphoreGive(g_i2c_mutex);
     if (e != ESP_OK) return false;
     memset(out, 0, sizeof *out);
@@ -67,7 +123,7 @@ bool rtc_write(const struct tm *in)
         dec2bcd(in->tm_year % 100),
     };
     xSemaphoreTake(g_i2c_mutex, portMAX_DELAY);
-    esp_err_t e = i2c_master_write_to_device(I2C_PORT, RTC_ADDR, d, sizeof d, I2C_TO);
+    esp_err_t e = i2c_wr(DEV_RTC, d, sizeof d);
     xSemaphoreGive(g_i2c_mutex);
     return e == ESP_OK;
 }
@@ -77,7 +133,7 @@ static void lcd_write4(uint8_t nib, uint8_t flags)
 {
     uint8_t b = (nib & 0xF0) | flags | LCD_BL;
     uint8_t seq[2] = { b | LCD_EN, b };
-    i2c_master_write_to_device(I2C_PORT, LCD_ADDR, seq, 2, I2C_TO);
+    i2c_wr(DEV_LCD, seq, 2);
 }
 
 static void lcd_byte(uint8_t v, uint8_t flags)
@@ -92,7 +148,7 @@ void lcd_init(void)
 {
     uint8_t probe = LCD_BL;
     xSemaphoreTake(g_i2c_mutex, portMAX_DELAY);
-    s_lcd_ok = i2c_master_write_to_device(I2C_PORT, LCD_ADDR, &probe, 1, I2C_TO) == ESP_OK;
+    s_lcd_ok = i2c_wr(DEV_LCD, &probe, 1) == ESP_OK;
     if (s_lcd_ok) {
         vTaskDelay(pdMS_TO_TICKS(50));
         lcd_write4(0x30, 0); vTaskDelay(pdMS_TO_TICKS(10));

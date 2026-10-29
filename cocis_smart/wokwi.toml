@@ -1,4 +1,11 @@
+# Wokwi for VS Code
+# Uses the firmware built by GitHub Actions: download the "firmware-esp32"
+# artifact from the latest run at https://github.com/AmanyireCI/cw/actions and
+# extract its two files into cocis_smart/build/
+#
+# If you build locally with idf.py instead, change firmware to:
+#   firmware = 'build/flasher_args.json'
 [wokwi]
 version = 1
-firmware = 'build/flasher_args.json'
+firmware = 'build/cocis_smart_merged.bin'
 elf = 'build/cocis_smart.elf'

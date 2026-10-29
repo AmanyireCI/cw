@@ -4,12 +4,17 @@ ESP32 + ESP-IDF (FreeRTOS) firmware, simulated on Wokwi. It provides RFID access
 
 ## Build and run
 
-**Option A: VS Code + Wokwi extension (recommended)**
-1. Install ESP-IDF v5.2 or newer and the *Wokwi Simulator* VS Code extension.
-2. `idf.py set-target esp32 && idf.py build`
-3. Command palette: **Wokwi: Start Simulator**. It uses `wokwi.toml` and `diagram.json`.
+**Option A: Wokwi in VS Code, with no ESP-IDF install**
+1. Install the **Wokwi Simulator** extension (Extensions panel, then search "Wokwi Simulator").
+2. Open https://github.com/AmanyireCI/cw/actions, click the latest green run, and download **firmware-esp32** under *Artifacts*.
+3. Extract `cocis_smart_merged.bin` and `cocis_smart.elf` into `cocis_smart/build/`.
+4. Press F1 and run **Wokwi: Start Simulator**. If asked, choose `cocis_smart/wokwi.toml`. The first time, also run **Wokwi: Request a New License** (it's free).
 
-**Option B: wokwi.com.** Create a new ESP32 **ESP-IDF** project, then copy `diagram.json` and the files in `main/` into it. Check that the online build accepts `sdkconfig.defaults`. If it doesn't, set `CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE` and `CONFIG_FATFS_LFN_HEAP` in the project's config.
+**Option B: wokwi.com (the shareable link for the report)**
+Create a project from https://wokwi.com/projects/new/esp-idf-esp32. Paste our `diagram.json` and `main/main.c` over the template's, then upload every other file in `main/` **except** `CMakeLists.txt`. That includes `arduino_entry.cpp`: wokwi.com builds on the Arduino-ESP32 core, which needs `setup()`/`loop()`.
+
+**Option C: local ESP-IDF build** (v5.1 to v5.5)
+`idf.py set-target esp32 && idf.py build`. Then set `firmware = 'build/flasher_args.json'` in `wokwi.toml`.
 
 ## Files (who owns what)
 
