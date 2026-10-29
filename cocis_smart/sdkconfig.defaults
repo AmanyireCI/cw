@@ -7,5 +7,3 @@ CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 # Task watchdog: a CPU starved by a stuck task triggers a reset
 CONFIG_ESP_TASK_WDT_EN=y
 CONFIG_ESP_TASK_WDT_PANIC=y
-# The I2C bus uses the legacy driver (works on all ESP-IDF 5.x versions)
-CONFIG_I2C_SUPPRESS_DEPRECATE_WARN=y
