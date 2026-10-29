@@ -1,0 +1,4 @@
+*.pdf
+build/
+sdkconfig
+sdkconfig.old
