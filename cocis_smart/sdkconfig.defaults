@@ -1,10 +1,7 @@
-# Long file names on the SD card
-CONFIG_FATFS_LFN_HEAP=y
-# 1 ms tick for responsive polling
+# 1 ms tick for responsive polling (code also works at the default 100 Hz)
 CONFIG_FREERTOS_HZ=1000
-# Console + FATFS + mbedTLS need more than the default 1 MB app partition
+# Headroom for future features (the app also fits the default 1 MB partition)
 CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=6144
 CONFIG_ESP_CONSOLE_UART_DEFAULT=y
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 # Task watchdog: a CPU starved by a stuck task triggers a reset

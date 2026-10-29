@@ -95,15 +95,15 @@ void lcd_init(void)
     s_lcd_ok = i2c_master_write_to_device(I2C_PORT, LCD_ADDR, &probe, 1, I2C_TO) == ESP_OK;
     if (s_lcd_ok) {
         vTaskDelay(pdMS_TO_TICKS(50));
-        lcd_write4(0x30, 0); vTaskDelay(pdMS_TO_TICKS(5));
-        lcd_write4(0x30, 0); vTaskDelay(pdMS_TO_TICKS(1));
+        lcd_write4(0x30, 0); vTaskDelay(pdMS_TO_TICKS(10));
+        lcd_write4(0x30, 0); vTaskDelay(pdMS_TO_TICKS(10));
         lcd_write4(0x30, 0);
         lcd_write4(0x20, 0);           /* 4-bit mode */
         lcd_cmd(0x28);                 /* 2 lines, 5x8 */
         lcd_cmd(0x0C);                 /* display on, cursor off */
         lcd_cmd(0x06);                 /* entry mode */
         lcd_cmd(0x01);                 /* clear */
-        vTaskDelay(pdMS_TO_TICKS(2));
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
     xSemaphoreGive(g_i2c_mutex);
     if (!s_lcd_ok) ESP_LOGW("lcd", "LCD not found at 0x%02X", LCD_ADDR);

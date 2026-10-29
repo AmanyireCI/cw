@@ -128,7 +128,7 @@ void log_event(log_kind_t kind, const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(it.line, sizeof it.line, fmt, ap);
     va_end(ap);
-    if (xQueueSend(g_log_q, &it, pdMS_TO_TICKS(100)) == pdTRUE) s_enqueued++;
+    if (xQueueSend(g_log_q, &it, pdMS_TO_TICKS(1000)) == pdTRUE) s_enqueued++;
     else s_dropped++;
 }
 
@@ -254,8 +254,10 @@ void logger_task(void *arg)
         }
         if (s_mounted && s_pending_count) pending_flush();
 
-        /* Occupancy snapshots are coalesced: many scans -> one file write */
-        if (s_mounted && (xEventGroupGetBits(g_sys_events) & EVT_SNAPSHOT_REQ)) {
+        /* Occupancy snapshots are coalesced: many scans -> one file write,
+         * done once the queue has drained */
+        if (s_mounted && uxQueueMessagesWaiting(g_log_q) == 0 &&
+            (xEventGroupGetBits(g_sys_events) & EVT_SNAPSHOT_REQ)) {
             xEventGroupClearBits(g_sys_events, EVT_SNAPSHOT_REQ);
             xSemaphoreTake(g_sd_mutex, portMAX_DELAY);
             if (!write_snapshot()) xEventGroupSetBits(g_sys_events, EVT_SNAPSHOT_REQ);

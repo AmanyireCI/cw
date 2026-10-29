@@ -1,0 +1,96 @@
+# Builds the firmware with ESP-IDF on GitHub's servers on every push.
+# - Several ESP-IDF 5.x versions, because the Wokwi web editor's version is not documented
+# - Each version is built with and without sdkconfig.defaults (wokwi.com may ignore that file)
+# - Compiler errors are shown as annotations on the commit
+# - The v5.3 build is published as a downloadable artifact (merged .bin for Wokwi)
+# - If the WOKWI_CLI_TOKEN repository secret is set, the firmware is also run in
+#   the Wokwi simulator and the serial output is saved
+name: Build firmware
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ESP-IDF ${{ matrix.idf }}
+    runs-on: ubuntu-latest
+    container: espressif/idf:${{ matrix.idf }}
+    strategy:
+      fail-fast: false
+      matrix:
+        idf: [v5.1.4, v5.2.3, v5.3.2, v5.4.1]
+    env:
+      WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: cocis_smart
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build (with sdkconfig.defaults)
+        run: |
+          . "$IDF_PATH/export.sh" > /dev/null
+          idf.py build 2>&1 | tee ../build.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Build (without sdkconfig.defaults, like the Wokwi web editor)
+        run: |
+          . "$IDF_PATH/export.sh" > /dev/null
+          mv sdkconfig.defaults /tmp/sdkconfig.defaults
+          idf.py -B build_plain -DSDKCONFIG=build_plain/sdkconfig build 2>&1 | tee ../build_plain.log
+          rc=${PIPESTATUS[0]}
+          mv /tmp/sdkconfig.defaults sdkconfig.defaults
+          exit $rc
+
+      - name: Report size and warnings
+        if: always()
+        run: |
+          . "$IDF_PATH/export.sh" > /dev/null
+          if [ -f build/cocis_smart.bin ]; then
+            size=$(idf.py size 2>/dev/null | grep -E "Total image size" | head -1)
+            echo "::notice title=Image size ${{ matrix.idf }}::$size"
+          fi
+          for log in ../build.log ../build_plain.log; do
+            [ -f "$log" ] || continue
+            errs=$(grep -E "error:|Error:|warning:|undefined reference|FAILED" "$log" | grep -v "^--" | sort -u | head -60)
+            if [ -n "$errs" ]; then
+              msg=$(printf '%s' "$errs" | sed -e 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+              echo "::warning title=Compiler output $(basename $log) ${{ matrix.idf }}::$msg"
+            fi
+          done
+
+      - name: Make merged firmware for Wokwi
+        if: matrix.idf == 'v5.3.2'
+        run: |
+          . "$IDF_PATH/export.sh" > /dev/null
+          cd build
+          esptool.py --chip esp32 merge_bin -o cocis_smart_merged.bin @flash_args
+
+      - name: Upload firmware
+        if: matrix.idf == 'v5.3.2'
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-esp32
+          path: |
+            cocis_smart/build/cocis_smart_merged.bin
+            cocis_smart/build/cocis_smart.elf
+
+      - name: Run in Wokwi simulator
+        if: matrix.idf == 'v5.3.2' && env.WOKWI_CLI_TOKEN != ''
+        uses: wokwi/wokwi-ci-action@v1
+        with:
+          token: ${{ secrets.WOKWI_CLI_TOKEN }}
+          path: cocis_smart
+          timeout: 20000
+          expect_text: 'CoCIS Smart Control'
+          serial_log_file: serial.log
+
+      - name: Show simulator output
+        if: always() && matrix.idf == 'v5.3.2' && env.WOKWI_CLI_TOKEN != ''
+        run: |
+          [ -f serial.log ] || exit 0
+          msg=$(tail -80 serial.log | sed -e 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+          echo "::notice title=Wokwi serial output::$msg"

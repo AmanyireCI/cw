@@ -50,7 +50,7 @@ void date_str(time_t t, char *buf, size_t len)
 static void sync_init(void)
 {
     g_event_q      = xQueueCreate(16, sizeof(sys_msg_t));
-    g_log_q        = xQueueCreate(32, sizeof(log_item_t));
+    g_log_q        = xQueueCreate(64, sizeof(log_item_t));
     g_rfid_q       = xQueueCreate(8, sizeof(rfid_scan_t));
     g_display_q    = xQueueCreate(4, sizeof(display_msg_t));
     g_buzzer_q     = xQueueCreate(4, sizeof(beep_t));
@@ -83,7 +83,10 @@ static void clock_init(void)
     }
 }
 
-void app_main(void)
+/* Start-up runs in its own task so its stack size is set here, not by the
+ * main-task stack option in sdkconfig (the Wokwi web editor may ignore
+ * sdkconfig.defaults). SD mounting and file I/O need several KB of stack. */
+static void startup_task(void *arg)
 {
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -124,4 +127,10 @@ void app_main(void)
     printf(" Type 'help' for commands, 'menu' for an overview\n");
     printf("==============================================\n");
     cli_start();
+    vTaskDelete(NULL);
+}
+
+void app_main(void)
+{
+    xTaskCreatePinnedToCore(startup_task, "startup", 8192, NULL, 5, NULL, 1);
 }
